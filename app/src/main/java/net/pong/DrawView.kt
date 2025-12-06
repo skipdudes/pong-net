@@ -10,6 +10,7 @@ import android.view.View
 
 class DrawView : View {
 
+    // Paint
     private val paintPaddle = Paint().apply { color = Color.BLACK }
     private val paintBall = Paint().apply { color = Color.RED }
     private val paintBackground = Paint().apply { color = Color.LTGRAY }
@@ -25,12 +26,35 @@ class DrawView : View {
     private var ballX = 0f
     private var ballY = 0f
 
+    // Ball velocity
+    private val initialSpeed = 10f
+    private var ballVX = initialSpeed
+    private var ballVY = initialSpeed
+    private var bounceForce = 1.2f
+
+    // Pointer mapping
     private val pointerToSide = mutableMapOf<Int, Side>()
     enum class Side { LEFT, RIGHT }
+
+    // Who just lost
+    private enum class LoseSide { NONE, LEFT, RIGHT }
+    private var lastLoser: LoseSide = LoseSide.NONE
 
     constructor(context: Context) : super(context)
     constructor(context: Context, attrs: AttributeSet) : super(context, attrs)
     constructor(context: Context, attrs: AttributeSet, defStyle: Int) : super(context, attrs, defStyle)
+
+    private val frameRate = 16L
+
+    private val updater = object : Runnable {
+        override fun run() {
+            updateGame()
+            invalidate()
+            postDelayed(this, frameRate)
+        }
+    }
+
+    init { post(updater) }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -38,12 +62,11 @@ class DrawView : View {
         // Background
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paintBackground)
 
-        // Position initialization (only once)
+        // First round init
         if (ballX == 0f && ballY == 0f) {
             leftY = height / 2f - paddleHeight / 2f
             rightY = height / 2f - paddleHeight / 2f
-            ballX = width / 2f
-            ballY = height / 2f
+            resetBall()
         }
 
         // Left paddle
@@ -64,8 +87,77 @@ class DrawView : View {
         canvas.drawCircle(ballX, ballY, ballRadius, paintBall)
     }
 
+    private fun updateGame() {
+        if (width == 0 || height == 0) return
+
+        // Move ball
+        ballX += ballVX
+        ballY += ballVY
+
+        // Top & bottom bounce
+        if (ballY - ballRadius < 0) {
+            ballY = ballRadius
+            ballVY = -ballVY
+        }
+        if (ballY + ballRadius > height) {
+            ballY = height - ballRadius
+            ballVY = -ballVY
+        }
+
+        // Paddle bounce
+        val leftPaddleX = 50f
+        if (ballX - ballRadius < leftPaddleX + paddleWidth &&
+            ballY > leftY && ballY < leftY + paddleHeight) {
+            ballX = leftPaddleX + paddleWidth + ballRadius
+            ballVX = -ballVX * bounceForce
+        }
+        val rightPaddleX = width - 50f - paddleWidth
+        if (ballX + ballRadius > rightPaddleX &&
+            ballY > rightY && ballY < rightY + paddleHeight) {
+            ballX = rightPaddleX - ballRadius
+            ballVX = -ballVX * bounceForce
+        }
+
+        // Score point and reset
+        if (ballX < 0) {
+            lastLoser = LoseSide.LEFT
+            resetBall()
+        }
+        if (ballX > width) {
+            lastLoser = LoseSide.RIGHT
+            resetBall()
+        }
+    }
+
+    private fun resetBall() {
+        when (lastLoser) {
+
+            LoseSide.NONE -> {
+                ballX = width / 2f
+                ballY = height / 2f
+            }
+
+            LoseSide.LEFT -> {
+                val paddleX = 50f + paddleWidth + ballRadius + 5f
+                ballX = paddleX
+                ballY = leftY + paddleHeight / 2f
+            }
+
+            LoseSide.RIGHT -> {
+                val paddleX = width - 50f - paddleWidth - ballRadius - 5f
+                ballX = paddleX
+                ballY = rightY + paddleHeight / 2f
+            }
+        }
+
+        // Reset velocity
+        ballVX = if ((0..1).random() == 0) initialSpeed else -initialSpeed
+        ballVY = if ((0..1).random() == 0) initialSpeed else -initialSpeed
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
+
             MotionEvent.ACTION_DOWN,
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val index = event.actionIndex
@@ -82,8 +174,8 @@ class DrawView : View {
                     val y = event.getY(i)
 
                     when (pointerToSide[pointerId]) {
-                        Side.LEFT -> leftY = y - paddleHeight / 2
-                        Side.RIGHT -> rightY = y - paddleHeight / 2
+                        Side.LEFT -> leftY = (y - paddleHeight / 2).coerceIn(0f, height - paddleHeight)
+                        Side.RIGHT -> rightY = (y - paddleHeight / 2).coerceIn(0f, height - paddleHeight)
                         null -> {}
                     }
                 }
