@@ -14,6 +14,11 @@ class DrawView : View {
     private val paintPaddle = Paint().apply { color = Color.BLACK }
     private val paintBall = Paint().apply { color = Color.RED }
     private val paintBackground = Paint().apply { color = Color.LTGRAY }
+    private val paintScore = Paint().apply {
+        color = Color.BLACK
+        isAntiAlias = true
+        textAlign = Paint.Align.CENTER
+    }
 
     // Dimensions
     private val paddleWidth = 40f
@@ -31,6 +36,10 @@ class DrawView : View {
     private var ballVX = initialSpeed
     private var ballVY = initialSpeed
     private var bounceForce = 1.2f
+
+    // Score
+    private var leftScore = 0
+    private var rightScore = 0
 
     // Pointer mapping
     private val pointerToSide = mutableMapOf<Int, Side>()
@@ -85,6 +94,10 @@ class DrawView : View {
 
         // Ball
         canvas.drawCircle(ballX, ballY, ballRadius, paintBall)
+
+        // Score
+        paintScore.textSize = height / 24f
+        canvas.drawText("$leftScore : $rightScore", width / 2f, height * 0.1f, paintScore)
     }
 
     private fun updateGame() {
@@ -121,10 +134,12 @@ class DrawView : View {
         // Score point and reset
         if (ballX < 0) {
             lastLoser = LoseSide.LEFT
+            rightScore += 1
             resetBall()
         }
         if (ballX > width) {
             lastLoser = LoseSide.RIGHT
+            leftScore += 1
             resetBall()
         }
     }
